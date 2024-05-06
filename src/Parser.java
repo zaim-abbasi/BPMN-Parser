@@ -212,7 +212,7 @@ public class Parser {
         XPath xpath = xPathfactory.newXPath();
 
         // XPath expression to select all tasks and their durations
-        XPathExpression taskExpr = xpath.compile("//userTask[@duration]");
+        XPathExpression taskExpr = xpath.compile("//*[local-name()='userTask' or local-name()='task'][@duration]");
         NodeList taskNodes = (NodeList) taskExpr.evaluate(doc, XPathConstants.NODESET);
 
         for (int i = 0; i < taskNodes.getLength(); i++) {
