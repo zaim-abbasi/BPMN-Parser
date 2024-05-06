@@ -1,6 +1,4 @@
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
+import java.io.*;
 
 import javax.xml.parsers.*;
 import javax.xml.transform.Transformer;
@@ -15,8 +13,7 @@ import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 import org.w3c.dom.Element;
 
-import java.util.Random;
-import java.util.Scanner;
+import java.util.*;
 
 public class Parser {
 
@@ -195,81 +192,80 @@ public class Parser {
     }
   }
 
+  public double calculateCT(String bpmnFilePath) {
+    File bpmnFile = new File(bpmnFilePath);
+    if (!bpmnFile.exists()) {
+      System.out.println("File not found: " + bpmnFilePath);
+      return 0.0;
+    }
 
-    public double calculateCT(String bpmnFilePath) {
-      File bpmnFile = new File(bpmnFilePath);
-      if (!bpmnFile.exists()) {
-        System.out.println("File not found: " + bpmnFilePath);
-        return 0.0;
+    double cycleTime = 0.0;
+    try {
+      DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
+      Document doc = dbFactory.newDocumentBuilder().parse(bpmnFile);
+
+      XPathFactory xPathfactory = XPathFactory.newInstance();
+      XPath xpath = xPathfactory.newXPath();
+
+      // XPath expression to select all tasks and their durations
+      XPathExpression taskExpr = xpath.compile("//*[local-name()='userTask' or local-name()='task'][@duration]");
+      NodeList taskNodes = (NodeList) taskExpr.evaluate(doc, XPathConstants.NODESET);
+
+      for (int i = 0; i < taskNodes.getLength(); i++) {
+        Node taskNode = taskNodes.item(i);
+        double duration = Double.parseDouble(taskNode.getAttributes().getNamedItem("duration").getNodeValue());
+        cycleTime += duration;
       }
 
-      double cycleTime = 0.0;
-      try {
-        DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
-        Document doc = dbFactory.newDocumentBuilder().parse(bpmnFile);
+      // Consider parallel paths by checking for parallel gateways
+      XPathExpression parallelGatewayExpr = xpath.compile("//parallelGateway");
+      NodeList parallelGatewayNodes = (NodeList) parallelGatewayExpr.evaluate(doc, XPathConstants.NODESET);
 
-        XPathFactory xPathfactory = XPathFactory.newInstance();
-        XPath xpath = xPathfactory.newXPath();
+      for (int i = 0; i < parallelGatewayNodes.getLength(); i++) {
+        Node parallelGatewayNode = parallelGatewayNodes.item(i);
+        NodeList outgoingFlows = parallelGatewayNode.getParentNode().getChildNodes();
+        double maxPathTime = 0.0;
 
-        // XPath expression to select all tasks and their durations
-        XPathExpression taskExpr = xpath.compile("//*[local-name()='userTask' or local-name()='task'][@duration]");
-        NodeList taskNodes = (NodeList) taskExpr.evaluate(doc, XPathConstants.NODESET);
-
-        for (int i = 0; i < taskNodes.getLength(); i++) {
-          Node taskNode = taskNodes.item(i);
-          double duration = Double.parseDouble(taskNode.getAttributes().getNamedItem("duration").getNodeValue());
-          cycleTime += duration;
-        }
-
-        // Consider parallel paths by checking for parallel gateways
-        XPathExpression parallelGatewayExpr = xpath.compile("//parallelGateway");
-        NodeList parallelGatewayNodes = (NodeList) parallelGatewayExpr.evaluate(doc, XPathConstants.NODESET);
-
-        for (int i = 0; i < parallelGatewayNodes.getLength(); i++) {
-          Node parallelGatewayNode = parallelGatewayNodes.item(i);
-          NodeList outgoingFlows = parallelGatewayNode.getParentNode().getChildNodes();
-          double maxPathTime = 0.0;
-
-          // Find the maximum time among outgoing flows from the parallel gateway
-          for (int j = 0; j < outgoingFlows.getLength(); j++) {
-            Node flowNode = outgoingFlows.item(j);
-            if (flowNode.getNodeType() == Node.ELEMENT_NODE && flowNode.getNodeName().equals("sequenceFlow")) {
-              String targetRef = ((Element) flowNode).getAttribute("targetRef");
-              double pathTime = calculatePathTime(doc, targetRef);
-              maxPathTime = Math.max(maxPathTime, pathTime);
-            }
+        // Find the maximum time among outgoing flows from the parallel gateway
+        for (int j = 0; j < outgoingFlows.getLength(); j++) {
+          Node flowNode = outgoingFlows.item(j);
+          if (flowNode.getNodeType() == Node.ELEMENT_NODE && flowNode.getNodeName().equals("sequenceFlow")) {
+            String targetRef = ((Element) flowNode).getAttribute("targetRef");
+            double pathTime = calculatePathTime(doc, targetRef);
+            maxPathTime = Math.max(maxPathTime, pathTime);
           }
-
-          cycleTime += maxPathTime;
         }
 
-        // Handle other gateway types similarly if needed (exclusive, inclusive)
-
-      } catch (Exception e) {
-        e.printStackTrace();
+        cycleTime += maxPathTime;
       }
 
-      return cycleTime;
+      // Handle other gateway types similarly if needed (exclusive, inclusive)
+
+    } catch (Exception e) {
+      e.printStackTrace();
     }
 
-    private double calculatePathTime(Document doc, String targetRef) {
-      double pathTime = 0.0;
-      try {
-        XPathFactory xPathfactory = XPathFactory.newInstance();
-        XPath xpath = xPathfactory.newXPath();
+    return cycleTime;
+  }
 
-        // XPath expression to select tasks in the path
-        XPathExpression pathExpr = xpath.compile("//userTask[@id='" + targetRef + "']");
-        NodeList pathNodes = (NodeList) pathExpr.evaluate(doc, XPathConstants.NODESET);
+  private double calculatePathTime(Document doc, String targetRef) {
+    double pathTime = 0.0;
+    try {
+      XPathFactory xPathfactory = XPathFactory.newInstance();
+      XPath xpath = xPathfactory.newXPath();
 
-        for (int k = 0; k < pathNodes.getLength(); k++) {
-          Node pathNode = pathNodes.item(k);
-          double duration = Double.parseDouble(pathNode.getAttributes().getNamedItem("duration").getNodeValue());
-          pathTime += duration;
-        }
-      } catch (Exception e) {
-        e.printStackTrace();
+      // XPath expression to select tasks in the path
+      XPathExpression pathExpr = xpath.compile("//userTask[@id='" + targetRef + "']");
+      NodeList pathNodes = (NodeList) pathExpr.evaluate(doc, XPathConstants.NODESET);
+
+      for (int k = 0; k < pathNodes.getLength(); k++) {
+        Node pathNode = pathNodes.item(k);
+        double duration = Double.parseDouble(pathNode.getAttributes().getNamedItem("duration").getNodeValue());
+        pathTime += duration;
       }
-      return pathTime;
+    } catch (Exception e) {
+      e.printStackTrace();
     }
+    return pathTime;
+  }
 }
