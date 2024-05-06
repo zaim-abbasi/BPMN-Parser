@@ -1,6 +1,10 @@
 import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+
 import javax.xml.parsers.*;
 import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
@@ -8,6 +12,7 @@ import javax.xml.xpath.*;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
+import org.xml.sax.SAXException;
 import org.w3c.dom.Element;
 
 import java.util.Random;
@@ -155,132 +160,116 @@ public class Parser {
   public void addActivityTime(String bpmnFilePath) {
     try {
       File bpmnFile = new File(bpmnFilePath);
-      if (!bpmnFile.exists()) {
-        System.out.println("File not found: " + bpmnFilePath);
-        return;
-      }
-
       DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
+      dbFactory.setNamespaceAware(true); // Enable namespace awareness
       DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
       Document doc = dBuilder.parse(bpmnFile);
 
-      Random rand = new Random();
-      NodeList taskList = doc.getElementsByTagName("task");
-      for (int i = 0; i < taskList.getLength(); i++) {
-        Node taskNode = taskList.item(i);
-        if (taskNode.getNodeType() == Node.ELEMENT_NODE) {
-          Element taskElement = (Element) taskNode;
-          int duration = rand.nextInt(11) + 5; // Random duration between 5 to 15 minutes
-          taskElement.setAttribute("duration", String.valueOf(duration));
-        }
+      // Specify the namespace URI for BPMN elements
+      String bpmnNamespaceURI = "http://www.omg.org/spec/BPMN/20100524/MODEL";
+
+      NodeList taskList = doc.getElementsByTagNameNS(bpmnNamespaceURI, "userTask");
+      if (taskList.getLength() == 0) {
+        taskList = doc.getElementsByTagNameNS(bpmnNamespaceURI, "task");
       }
 
-      // Write the updated XML to a new file
-      String updatedFilename = "updated_" + bpmnFile.getName();
+      Random rand = new Random();
+
+      for (int i = 0; i < taskList.getLength(); i++) {
+        Element taskElement = (Element) taskList.item(i);
+        int duration = rand.nextInt(11) + 5; // Random duration between 5 to 15 minutes
+        taskElement.setAttribute("duration", String.valueOf(duration));
+      }
+
+      // Write the updated document to a new file
+      String updatedFilePath = "resource/updated_" + bpmnFile.getName();
       TransformerFactory transformerFactory = TransformerFactory.newInstance();
       Transformer transformer = transformerFactory.newTransformer();
       DOMSource source = new DOMSource(doc);
-      StreamResult result = new StreamResult(new File("resource/" + updatedFilename));
+      StreamResult result = new StreamResult(new FileWriter(updatedFilePath));
       transformer.transform(source, result);
 
-      System.out.println("Activity times added and saved to: " + updatedFilename);
-
+      System.out.println("Activity times added and file saved: " + updatedFilePath);
     } catch (Exception e) {
       e.printStackTrace();
     }
   }
 
-  public double calculateCT(String bpmnFilePath) {
-    double cycleTime = 0.0;
-    try {
+
+    public double calculateCT(String bpmnFilePath) {
       File bpmnFile = new File(bpmnFilePath);
       if (!bpmnFile.exists()) {
         System.out.println("File not found: " + bpmnFilePath);
-        return cycleTime;
+        return 0.0;
       }
 
-      DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
-      DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
-      Document doc = dBuilder.parse(bpmnFile);
+      double cycleTime = 0.0;
+      try {
+        DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
+        Document doc = dbFactory.newDocumentBuilder().parse(bpmnFile);
 
-      XPathFactory xPathfactory = XPathFactory.newInstance();
-      XPath xpath = xPathfactory.newXPath();
+        XPathFactory xPathfactory = XPathFactory.newInstance();
+        XPath xpath = xPathfactory.newXPath();
 
-      // XPath expression to sum up task durations
-      XPathExpression taskDurationExpr = xpath.compile("//task/@duration");
+        // XPath expression to select all tasks and their durations
+        XPathExpression taskExpr = xpath.compile("//userTask[@duration]");
+        NodeList taskNodes = (NodeList) taskExpr.evaluate(doc, XPathConstants.NODESET);
 
-      NodeList durationNodes = (NodeList) taskDurationExpr.evaluate(doc, XPathConstants.NODESET);
-      for (int i = 0; i < durationNodes.getLength(); i++) {
-        Node durationNode = durationNodes.item(i);
-        int duration = Integer.parseInt(durationNode.getNodeValue());
-        cycleTime += duration;
+        for (int i = 0; i < taskNodes.getLength(); i++) {
+          Node taskNode = taskNodes.item(i);
+          double duration = Double.parseDouble(taskNode.getAttributes().getNamedItem("duration").getNodeValue());
+          cycleTime += duration;
+        }
+
+        // Consider parallel paths by checking for parallel gateways
+        XPathExpression parallelGatewayExpr = xpath.compile("//parallelGateway");
+        NodeList parallelGatewayNodes = (NodeList) parallelGatewayExpr.evaluate(doc, XPathConstants.NODESET);
+
+        for (int i = 0; i < parallelGatewayNodes.getLength(); i++) {
+          Node parallelGatewayNode = parallelGatewayNodes.item(i);
+          NodeList outgoingFlows = parallelGatewayNode.getParentNode().getChildNodes();
+          double maxPathTime = 0.0;
+
+          // Find the maximum time among outgoing flows from the parallel gateway
+          for (int j = 0; j < outgoingFlows.getLength(); j++) {
+            Node flowNode = outgoingFlows.item(j);
+            if (flowNode.getNodeType() == Node.ELEMENT_NODE && flowNode.getNodeName().equals("sequenceFlow")) {
+              String targetRef = ((Element) flowNode).getAttribute("targetRef");
+              double pathTime = calculatePathTime(doc, targetRef);
+              maxPathTime = Math.max(maxPathTime, pathTime);
+            }
+          }
+
+          cycleTime += maxPathTime;
+        }
+
+        // Handle other gateway types similarly if needed (exclusive, inclusive)
+
+      } catch (Exception e) {
+        e.printStackTrace();
       }
 
-    } catch (Exception e) {
-      e.printStackTrace();
+      return cycleTime;
     }
 
-    return cycleTime;
-  }
+    private double calculatePathTime(Document doc, String targetRef) {
+      double pathTime = 0.0;
+      try {
+        XPathFactory xPathfactory = XPathFactory.newInstance();
+        XPath xpath = xPathfactory.newXPath();
 
-  // public double calculateCTT(String bpmnFilePath) {
-  // double cycleTime = 0.0;
-  // try {
-  // File bpmnFile = new File(bpmnFilePath);
-  // if (!bpmnFile.exists()) {
-  // System.out.println("File not found: " + bpmnFilePath);
-  // return cycleTime;
-  // }
+        // XPath expression to select tasks in the path
+        XPathExpression pathExpr = xpath.compile("//userTask[@id='" + targetRef + "']");
+        NodeList pathNodes = (NodeList) pathExpr.evaluate(doc, XPathConstants.NODESET);
 
-  // DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
-  // DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
-  // Document doc = dBuilder.parse(bpmnFile);
-
-  // XPathFactory xPathfactory = XPathFactory.newInstance();
-  // XPath xpath = xPathfactory.newXPath();
-
-  // // XPath expression to sum up task durations
-  // XPathExpression taskDurationExpr = xpath.compile("//task/@duration");
-
-  // NodeList durationNodes = (NodeList) taskDurationExpr.evaluate(doc,
-  // XPathConstants.NODESET);
-  // for (int i = 0; i < durationNodes.getLength(); i++) {
-  // Node durationNode = durationNodes.item(i);
-  // int duration = Integer.parseInt(durationNode.getNodeValue());
-  // cycleTime += duration;
-  // }
-
-  // // Handle exclusive gateways
-  // XPathExpression gatewayExpr = xpath.compile("//exclusiveGateway");
-  // NodeList gatewayNodes = (NodeList) gatewayExpr.evaluate(doc,
-  // XPathConstants.NODESET);
-  // for (int i = 0; i < gatewayNodes.getLength(); i++) {
-  // Node gatewayNode = gatewayNodes.item(i);
-  // if (gatewayNode.getNodeType() == Node.ELEMENT_NODE) {
-  // Element gatewayElement = (Element) gatewayNode;
-  // NodeList outgoingNodes = gatewayElement.getElementsByTagName("outgoing");
-  // double maxPathTime = 0.0;
-  // for (int j = 0; j < outgoingNodes.getLength(); j++) {
-  // Node outgoingNode = outgoingNodes.item(j);
-  // String sequenceFlowId = outgoingNode.getTextContent();
-  // XPathExpression pathExpr = xpath
-  // .compile("//sequenceFlow[@id='" + sequenceFlowId +
-  // "']/following-sibling::task/@duration");
-  // Node pathNode = (Node) pathExpr.evaluate(doc, XPathConstants.NODE);
-  // if (pathNode != null) {
-  // double pathTime = Double.parseDouble(pathNode.getNodeValue());
-  // if (pathTime > maxPathTime) {
-  // maxPathTime = pathTime;
-  // }
-  // }
-  // }
-  // cycleTime += maxPathTime;
-  // }
-  // }
-
-  // } catch (Exception e) {
-  // e.printStackTrace();
-  // }
-  // return cycleTime;
-  // }
+        for (int k = 0; k < pathNodes.getLength(); k++) {
+          Node pathNode = pathNodes.item(k);
+          double duration = Double.parseDouble(pathNode.getAttributes().getNamedItem("duration").getNodeValue());
+          pathTime += duration;
+        }
+      } catch (Exception e) {
+        e.printStackTrace();
+      }
+      return pathTime;
+    }
 }
