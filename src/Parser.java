@@ -30,7 +30,7 @@ public class Parser {
     obj.countBPMNElements(bpmnFilePath);
     sc.close();
 
-    obj.addActivityTime(bpmnFilePath);
+    // obj.addActivityTime(bpmnFilePath);
 
     bpmnFilePath = "resource/updated_" + filename;
     double cycleTime = obj.calculateCT(bpmnFilePath);
