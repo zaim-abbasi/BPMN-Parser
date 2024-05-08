@@ -25,45 +25,8 @@ To use the BPMN Parser, follow these steps:
 4. **Analyzing Results:** Check the terminal output for the count of BPMN elements and the calculated cycle time.
 
 ## Sample Output
-Enter file name: file.bpmn
+![parser-output](https://github.com/zaim-abbasi/BPMN-Parser/assets/125147306/4ac27928-4840-4531-ae7f-f3e443cdb3dd)
 
-BPMN Model Elements:
---------------------------------
-   Total_Events: 4
-      Start_Events: 2
-      Intermediate_Events: 0    
-      End_Events: 2
---------------------------------
-   Total_Activities: 0
-      Tasks: 0
-        User_Tasks: 0
-        Service_Tasks: 0        
-        Script_Tasks: 0
-        Manual_Tasks: 0
-      Sub_Processes: 0
---------------------------------
-   Total_Gateways: 4
-      Exclusive_Gateways_XOR: 0 
-      Parallel_Gateways_AND: 4
-      Inclusive_Gateways_OR: 0
---------------------------------
-   Total_Artifacts: 0
-      Data_Objects: 0
-      Groups: 0
-      Annotations: 0
---------------------------------
-   Total_Connecting_Objects: 23
-      Sequence_Flows: 23
-      Message_Flows: 0
-      Associations: 0
---------------------------------
-   Total_Swimlanes: 0
-      Pools: 0
-      Lanes: 0
---------------------------------
-
-Activity times added and file saved: resource/updated_file.bpmn
-Cycle Time: 142.0 minute
 ## Contributing
 Contributions to the BPMN Parser are welcome. Please follow the contribution guidelines and open a pull request for any proposed changes.
 
