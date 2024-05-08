@@ -25,7 +25,12 @@ To use the BPMN Parser, follow these steps:
 4. **Analyzing Results:** Check the terminal output for the count of BPMN elements and the calculated cycle time.
 
 ## Sample Output
-![parser-output](https://github.com/zaim-abbasi/BPMN-Parser/assets/125147306/4ac27928-4840-4531-ae7f-f3e443cdb3dd)
+
+###Diagram
+![diagram (2)](https://github.com/zaim-abbasi/BPMN-Parser/assets/125147306/5b77e374-ab31-409b-92b1-3a5deb9b8fa4)
+
+### Output
+![parser-output](https://github.com/zaim-abbasi/BPMN-Parser/assets/125147306/b80b4515-ffa0-4ad6-857d-409e8cc789ea)
 
 ## Contributing
 Contributions to the BPMN Parser are welcome. Please follow the contribution guidelines and open a pull request for any proposed changes.
